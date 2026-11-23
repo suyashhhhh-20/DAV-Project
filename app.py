@@ -1,5 +1,6 @@
 """HeartScope dashboard. Run: python -m streamlit run app.py"""
 import json
+import base64
 import sys
 from html import escape
 from pathlib import Path
@@ -15,8 +16,8 @@ from train_model import MODEL_FILE, RESULTS_FILE, train_and_evaluate
 
 st.set_page_config(page_title="HeartScope | Heart Disease Explorer", page_icon="♥", layout="wide")
 st.markdown(f"<style>{(ROOT / 'assets' / 'dashboard.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
-BLUE, CORAL = "#2563eb", "#ea7759"
-COLORS = {"No disease": BLUE, "Disease": CORAL}
+BLUE, CORAL = "#119d89", "#91dece"
+COLORS = {"No disease": CORAL, "Disease": BLUE}
 
 
 def html(text):
@@ -30,15 +31,17 @@ def section(title, subtitle=""):
 
 
 def stats(items):
-    for col, (label, value, detail) in zip(st.columns(len(items)), items):
+    icons = ["M4 6h16v14H4z M8 3v6 M16 3v6 M4 11h16", "M3 12h4l3-7 4 14 3-7h4", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 7v5l3 2", "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z"]
+    for index, (col, (label, value, detail)) in enumerate(zip(st.columns(len(items)), items)):
         with col:
-            html(f'<div class="stat"><span>{escape(str(label))}</span><strong>{escape(str(value))}</strong><small>{escape(str(detail))}</small></div>')
+            icon = f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="{icons[index % len(icons)]}"/></svg>'
+            html(f'<div class="stat stat-{index}"><div class="stat-top"><span>{escape(str(label))}</span><i>{icon}</i></div><strong>{escape(str(value))}</strong><small>{escape(str(detail))}</small></div>')
 
 
 def chart(fig):
-    fig = fig.properties(height=310).configure_view(strokeWidth=0).configure_axis(
-        labelColor="#62738b", titleColor="#62738b", gridColor="#e9eef5", domain=False,
-        labelFontSize=11, titleFontSize=12).configure_legend(orient="top")
+    fig = fig.properties(height=245).configure_view(strokeWidth=0).configure_axis(
+        labelColor="#647b80", titleColor="#647b80", gridColor="#edf3f2", domain=False,
+        labelFontSize=11, titleFontSize=12).configure_legend(orient="top", labelColor="#506a70", labelFontSize=11)
     st.altair_chart(fig, use_container_width=True)
 
 
@@ -97,16 +100,20 @@ with st.sidebar:
     st.caption("Educational use only · Not a medical diagnosis")
 
 descriptions = {
-    "Overview": ("A clearer view of heart health data.", "Explore the cohort, understand patterns and evaluate machine learning models."),
-    "Data explorer": ("Know the data behind the model.", "Inspect records, review data quality and download your selected cohort."),
-    "Health insights": ("Turn measurements into insights.", "Explore associations across demographics and health measurements."),
-    "Model lab": ("Compare evidence, not just accuracy.", "Inspect test metrics, classification errors and feature importance."),
-    "Prediction studio": ("Explore a model prediction.", "Enter a sample profile and see how a trained classifier responds."),
+    "Overview": ("Heart health, at a glance", "A connected view of patient data, clinical patterns and machine learning."),
+    "Data explorer": ("Explore the dataset", "Inspect patient records and understand the quality of your data."),
+    "Health insights": ("Discover the patterns", "Compare demographics, measurements and recorded outcomes."),
+    "Model lab": ("Inside the models", "Compare performance and understand where each classifier succeeds or misses."),
+    "Prediction studio": ("Prediction studio", "Build a sample profile and explore the model response."),
 }
-html(f'<div class="eyebrow">HEARTSCOPE / {page.upper()}</div>')
-st.title(descriptions[page][0])
-st.markdown(descriptions[page][1])
-html('<div class="notice"><b>Educational project</b><span>Model estimates are not diagnoses or validated estimates of personal clinical risk.</span></div>')
+html(f'<div class="workspace-bar"><span><b>{page}</b><span class="workspace-path"> / HeartScope workspace</span></span><span class="workspace-badge"><i></i> EDUCATIONAL ANALYTICS</span></div>')
+if page == "Overview":
+    heart_path = ROOT / "assets" / "mint-heart.png"
+    heart_image = ('<img class="heart-art" alt="Decorative anatomical heart illustration" src="data:image/png;base64,' + base64.b64encode(heart_path.read_bytes()).decode("ascii") + '">') if heart_path.exists() else ''
+    wave = '<svg class="pulse-line" viewBox="0 0 360 100" aria-hidden="true"><path d="M0 55H65L80 40 99 70 123 12 150 89 172 55H205L220 44 235 65 250 55H360" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+    html(f'<div class="clinical-hero"><div class="hero-copy"><div class="eyebrow">HEART HEALTH INTELLIGENCE</div><h1>HeartScope</h1><p>Understand the data.<br>See the bigger picture of heart health.</p><span class="hero-tag">Explore &nbsp;/&nbsp; Understand &nbsp;/&nbsp; Predict</span></div><div class="hero-visual">{wave}{heart_image}</div></div>')
+else:
+    html(f'<div class="page-heading"><div class="eyebrow">HEARTSCOPE ANALYTICS</div><h1>{descriptions[page][0]}</h1><p>{descriptions[page][1]}</p></div>')
 
 
 def reset_filters():
@@ -115,7 +122,7 @@ def reset_filters():
 
 
 def cohort_filters():
-    with st.expander("Cohort filters · age and sex"):
+    with st.expander("Filter cohort by age and sex"):
         a, b = st.columns(2)
         with a:
             ages = st.slider("Age range (years)", int(df.Age.min()), int(df.Age.max()),
@@ -136,24 +143,24 @@ if page in ["Overview", "Data explorer", "Health insights"]:
 
 if page == "Overview":
     cases = int(cohort[TARGET].sum())
-    stats([("Cohort records", f"{len(cohort):,}", "After duplicate removal"),
-           ("Disease-labelled records", f"{cases / len(cohort):.1%}", f"{cases:,} records in selected cohort"),
-           ("Median age", f"{cohort.Age.median():.0f} years", "Selected cohort"),
-           ("Model inputs", len(ALL_FEATURES), "Numeric and categorical features")])
-    left, right = st.columns([1, 1.35])
-    with left, st.container(border=True):
+    stats([("Patient records", f"{len(cohort):,}", "Cleaned study cohort"),
+           ("Disease labels", f"{cases / len(cohort):.1%}", f"{cases:,} records in this cohort"),
+           ("Median age", f"{cohort.Age.median():.0f}", "Years"),
+           ("Input features", len(ALL_FEATURES), "Health measurements")])
+    left, right = st.columns([1, 1.25])
+    with left, st.container(border=True, key="composition_card"):
         section("Cohort composition", "Recorded diagnosis labels, not model predictions")
         counts = cohort.Diagnosis.value_counts().reindex(["No disease", "Disease"], fill_value=0)
         slices = counts.rename_axis("Diagnosis").reset_index(name="Records")
         slices["Share"] = slices.Records / slices.Records.sum()
-        fig = alt.Chart(slices).mark_arc(innerRadius=85, outerRadius=120, cornerRadius=5, padAngle=.03).encode(
+        fig = alt.Chart(slices).mark_arc(innerRadius=72, outerRadius=100, cornerRadius=5, padAngle=.03).encode(
             theta="Records:Q", color=diagnosis_color(), tooltip=["Diagnosis:N", "Records:Q", alt.Tooltip("Share:Q", format=".1%")])
         center = alt.Chart(pd.DataFrame({"Total": [f"{len(cohort):,}"]})).mark_text(fontSize=30, fontWeight="bold", color="#17243b").encode(text="Total:N")
         chart(fig + center)
-    with right, st.container(border=True):
-        section("Age profile", "Compare the two groups across age ranges")
+    with right, st.container(border=True, key="age_card"):
+        section("Age distribution", "Patient age in years, grouped by recorded diagnosis")
         chart(histogram(cohort, "Age", "Age (years)"))
-    with st.container(border=True):
+    with st.container(border=True, key="explore_card"):
         section("Start exploring", "Follow the data from records to a prediction")
         for col, title, desc, dest in zip(st.columns(3), ["Inspect the dataset", "Compare the models", "Try a sample profile"],
                                         ["Review quality checks and source records.", "Understand performance and classification errors.", "Explore an educational model output."],
