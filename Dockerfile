@@ -8,5 +8,6 @@ COPY --chown=appuser:appuser . .
 RUN chown appuser:appuser /app
 USER appuser
 RUN python src/train_model.py
+RUN python verify_app.py
 EXPOSE 8501
 CMD ["sh", "-c", "python -m streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-8501} --server.headless=true --browser.gatherUsageStats=false"]

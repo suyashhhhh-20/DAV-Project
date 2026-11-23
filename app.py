@@ -38,7 +38,7 @@ def stats(items):
 def chart(fig):
     fig = fig.properties(height=310).configure_view(strokeWidth=0).configure_axis(
         labelColor="#62738b", titleColor="#62738b", gridColor="#e9eef5", domain=False,
-        labelFontSize=11, titleFontSize=12).configure_legend(orient="top", title=None)
+        labelFontSize=11, titleFontSize=12).configure_legend(orient="top")
     st.altair_chart(fig, use_container_width=True)
 
 
