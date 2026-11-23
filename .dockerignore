@@ -1,0 +1,13 @@
+venv
+.venv
+**/__pycache__
+*.pyc
+.git
+.env
+.env.*
+.streamlit/secrets.toml
+models
+outputs
+notebook
+docs
+app_legacy.py
