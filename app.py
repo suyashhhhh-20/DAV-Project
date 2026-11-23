@@ -17,7 +17,7 @@ from train_model import MODEL_FILE, RESULTS_FILE, train_and_evaluate
 st.set_page_config(page_title="HeartScope | Heart Disease Explorer", page_icon="♥", layout="wide")
 st.markdown(f"<style>{(ROOT / 'assets' / 'dashboard.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 BLUE, CORAL = "#119d89", "#91dece"
-COLORS = {"No disease": CORAL, "Disease": BLUE}
+COLORS = {"No disease": "#3B82C4", "Disease": "#D97706"}
 
 
 def html(text):
@@ -39,10 +39,10 @@ def stats(items):
 
 
 def chart(fig):
-    fig = fig.properties(height=245).configure_view(strokeWidth=0).configure_axis(
+    fig = fig.properties(height=245, background="white").configure_view(strokeWidth=0).configure_axis(
         labelColor="#647b80", titleColor="#647b80", gridColor="#edf3f2", domain=False,
         labelFontSize=11, titleFontSize=12).configure_legend(orient="top", labelColor="#506a70", labelFontSize=11)
-    st.altair_chart(fig, use_container_width=True)
+    st.altair_chart(fig, use_container_width=True, theme=None)
 
 
 def diagnosis_color():
@@ -194,14 +194,24 @@ elif page == "Data explorer":
 elif page == "Health insights":
     tab1, tab2, tab3 = st.tabs(["Demographics", "Measurements", "Relationships"])
     with tab1:
-        a, b = st.columns(2)
-        with a, st.container(border=True):
-            section("Age by diagnosis")
-            chart(alt.Chart(cohort).mark_boxplot(size=45).encode(x="Diagnosis:N", y=alt.Y("Age:Q", title="Age (years)"), color=diagnosis_color()))
-        with b, st.container(border=True):
-            section("Recorded sex and diagnosis")
-            groups = cohort.groupby(["Gender", "Diagnosis"]).size().reset_index(name="Records")
-            chart(alt.Chart(groups).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(x="Gender:N", xOffset="Diagnosis:N", y="Records:Q", color=diagnosis_color(), tooltip=list(groups.columns)))
+        # Horizontal, full-width charts keep labels readable on small screens.
+        with st.container(border=True):
+            section("Age by diagnosis", "Thick line: middle 50% of ages · white marker: median · thin line: full range")
+            ages = cohort.groupby("Diagnosis").Age.agg(Minimum="min", Q1=lambda s: s.quantile(.25), Median="median", Q3=lambda s: s.quantile(.75), Maximum="max", Records="count").reset_index()
+            base = alt.Chart(ages).encode(y=alt.Y("Diagnosis:N", sort=list(COLORS), title=None), color=diagnosis_color(), tooltip=["Diagnosis:N", "Records:Q"] + [alt.Tooltip(f + ":Q", format=".1f") for f in ["Minimum", "Q1", "Median", "Q3", "Maximum"]])
+            scale = alt.Scale(domain=[int(df.Age.min()) - 2, int(df.Age.max()) + 2], zero=False)
+            full_range = base.mark_rule(strokeWidth=2).encode(x=alt.X("Minimum:Q", title="Age (years)", scale=scale), x2="Maximum:Q")
+            middle = base.mark_bar(size=24, cornerRadius=5).encode(x="Q1:Q", x2="Q3:Q")
+            median = base.mark_tick(color="white", thickness=3, size=28).encode(x="Median:Q", color=alt.value("white"))
+            chart(full_range + middle + median)
+            st.dataframe(ages[["Diagnosis", "Records", "Median", "Q1", "Q3"]].round(1), hide_index=True, use_container_width=True)
+        with st.container(border=True):
+            section("Recorded sex and diagnosis", "Grouped counts, not percentages · hover or tap a bar for details")
+            index = pd.MultiIndex.from_product([["Female", "Male"], list(COLORS)], names=["Gender", "Diagnosis"])
+            groups = cohort.groupby(["Gender", "Diagnosis"]).size().reindex(index, fill_value=0).reset_index(name="Records")
+            bars = alt.Chart(groups).encode(y=alt.Y("Gender:N", title=None, sort=["Female", "Male"]), yOffset=alt.YOffset("Diagnosis:N", sort=list(COLORS)), x=alt.X("Records:Q", title="Records", scale=alt.Scale(domain=[0, max(1, int(groups.Records.max())) * 1.18]), axis=alt.Axis(tickMinStep=1)), color=diagnosis_color(), tooltip=["Gender:N", "Diagnosis:N", "Records:Q"])
+            labels = bars.mark_text(align="left", dx=6, fontSize=12).encode(text="Records:Q", color=alt.value("#334155"))
+            chart(bars.mark_bar(cornerRadiusEnd=5) + labels)
         st.caption("Counts depend on the cohort's composition; differences do not establish causation.")
     with tab2:
         measurement = st.selectbox("Measurement", ["Cholesterol", "RestingBP", "MaxHR", "Oldpeak"])
@@ -307,3 +317,4 @@ else:
 
 st.divider()
 st.caption("HeartScope · Educational heart disease exploration · Dataset associations do not establish causation")
+

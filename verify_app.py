@@ -19,7 +19,13 @@ check("Reset cohort")
 for page in ["Data explorer", "Health insights", "Model lab", "Prediction studio"]:
     app.radio[0].set_value(page).run()
     check(page)
+    if page == "Health insights":
+        app.multiselect[0].set_value(["Female"]).run()
+        check("Demographics with one sex")
+        app.slider[0].set_value((40, 40)).run()
+        check("Demographics with one age")
 app.button[0].click().run()
 check("Sample prediction")
 assert "Prediction result" in [s.value for s in app.subheader]
 print("All dashboard smoke checks passed", flush=True)
+
